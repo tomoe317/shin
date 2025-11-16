@@ -35,6 +35,59 @@ export default async function HomePage() {
         {/* Void Black Background */}
         <div className="absolute inset-0 z-0 bg-black" />
 
+        {/* Animated glow orbs - subtle depth */}
+        <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
+          {/* Top-left glow */}
+          <div
+            className="bg-cyber-cyan/20 absolute -left-32 -top-32 h-64 w-64 rounded-full blur-3xl"
+            style={{
+              animation: "float 20s ease-in-out infinite",
+              animationDelay: "0s",
+            }}
+          />
+          {/* Top-right glow */}
+          <div
+            className="bg-cyber-magenta/15 absolute -right-40 -top-40 h-80 w-80 rounded-full blur-3xl"
+            style={{
+              animation: "float 25s ease-in-out infinite",
+              animationDelay: "3s",
+            }}
+          />
+          {/* Bottom-center glow */}
+          <div
+            className="bg-cyber-purple/10 absolute -bottom-40 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full blur-3xl"
+            style={{
+              animation: "float 22s ease-in-out infinite",
+              animationDelay: "5s",
+            }}
+          />
+        </div>
+
+        {/* Animated grid pattern overlay */}
+        <div className="pointer-events-none absolute inset-0 z-[1]">
+          <div
+            className="h-full w-full"
+            style={{
+              backgroundImage: `linear-gradient(to right, rgba(34, 211, 238, 0.03) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(34, 211, 238, 0.03) 1px, transparent 1px)`,
+              backgroundSize: "80px 80px",
+            }}
+          />
+        </div>
+
+        {/* Animated accent lines */}
+        <div className="pointer-events-none absolute left-0 top-1/3 z-[1] w-full h-px">
+          <div
+            className="h-full w-full bg-gradient-to-r from-transparent via-cyber-cyan/30 to-transparent"
+            style={{
+              animation: "shimmer 8s ease-in-out infinite",
+            }}
+          />
+        </div>
+
+        {/* Radial gradient fade effect */}
+        <div className="pointer-events-none absolute inset-0 z-[2] bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.4)_80%)]" />
+
         {/* Hero Content */}
         <div className="relative z-10 flex min-h-[100vh] items-center">
           <div className="container mx-auto px-4 py-20 md:py-32">
