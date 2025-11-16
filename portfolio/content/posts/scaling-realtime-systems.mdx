@@ -1,0 +1,295 @@
+---
+title: "Scaling Real-Time Systems: Lessons from Production"
+summary: "Practical insights from scaling WebSocket infrastructure to handle 10,000+ concurrent connections with sub-100ms latency."
+tags: ["Backend", "WebSockets", "Scalability", "Architecture"]
+publishedAt: "2024-09-22"
+published: true
+---
+
+## Introduction
+
+Real-time systems are deceptively hard to scale. What works for 100 users breaks at 1,000. What works at 1,000 falls apart at 10,000. This post shares lessons learned from scaling a WebSocket-based collaboration platform from prototype to production.
+
+## The Journey
+
+### Phase 1: Single Server (0-500 users)
+
+**Architecture:**
+- Single Node.js server
+- In-memory state
+- Direct WebSocket connections
+
+**Works until:** ~500 concurrent connections
+
+**Why it breaks:**
+- Memory exhausted
+- CPU bottleneck
+- Single point of failure
+
+### Phase 2: Vertical Scaling (500-2,000 users)
+
+**Changes:**
+- Bigger server (32 CPU, 64GB RAM)
+- PM2 cluster mode
+- Redis for shared state
+
+**Works until:** ~2,000 concurrent connections
+
+**Why it breaks:**
+- Cost explodes ($1,000+/month)
+- Still single point of failure
+- Connection limits hit
+
+### Phase 3: Horizontal Scaling (2,000-10,000+ users)
+
+**Final Architecture:**
+
+```
+                    ┌──────────────┐
+                    │ Load Balancer│
+                    │  (Sticky IP) │
+                    └──────┬───────┘
+                           │
+       ┌───────────────────┼───────────────────┐
+       ▼                   ▼                   ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│ WS Server 1  │    │ WS Server 2  │    │ WS Server 3  │
+└──────┬───────┘    └──────┬───────┘    └──────┬───────┘
+       │                   │                   │
+       └───────────────────┼───────────────────┘
+                           ▼
+                    ┌──────────────┐
+                    │ Redis Pub/Sub│
+                    └──────────────┘
+```
+
+## Key Patterns
+
+### 1. Sticky Sessions
+
+Critical for WebSocket scaling:
+
+```nginx
+# nginx config
+upstream websocket {
+  ip_hash;  # Stick to same server
+  server ws1.example.com:3000;
+  server ws2.example.com:3000;
+  server ws3.example.com:3000;
+}
+```
+
+Why? WebSocket connections are stateful. Reconnecting to a different server loses context.
+
+### 2. Redis Pub/Sub for Cross-Server Communication
+
+```typescript
+// Server 1 receives message
+wss.on('connection', (ws) => {
+  ws.on('message', (data) => {
+    // Publish to all servers
+    redis.publish('messages', JSON.stringify({
+      userId: ws.userId,
+      data,
+    }));
+  });
+});
+
+// All servers subscribe
+redis.subscribe('messages');
+redis.on('message', (channel, message) => {
+  const { userId, data } = JSON.parse(message);
+
+  // Broadcast to local connections
+  wss.clients.forEach((client) => {
+    if (client.userId !== userId) {
+      client.send(data);
+    }
+  });
+});
+```
+
+**Gotcha:** Don't send to yourself! Filter by user ID.
+
+### 3. Health Checks and Graceful Shutdown
+
+```typescript
+// Health endpoint
+app.get('/health', (req, res) => {
+  const health = {
+    uptime: process.uptime(),
+    connections: wss.clients.size,
+    memory: process.memoryUsage(),
+    status: 'healthy',
+  };
+
+  res.json(health);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, closing server...');
+
+  // Stop accepting new connections
+  server.close();
+
+  // Close existing connections gracefully
+  for (const client of wss.clients) {
+    client.close(1001, 'Server shutting down');
+  }
+
+  // Wait for cleanup
+  await redis.quit();
+
+  process.exit(0);
+});
+```
+
+### 4. Backpressure Handling
+
+Prevent overwhelming clients:
+
+```typescript
+ws.on('message', async (data) => {
+  // Check if client can receive
+  if (ws.bufferedAmount > THRESHOLD) {
+    console.warn('Client backpressure detected');
+
+    // Drop message or queue
+    return;
+  }
+
+  // Process and send
+  const response = await processMessage(data);
+  ws.send(response);
+});
+```
+
+### 5. Connection Monitoring
+
+Track connections per server:
+
+```typescript
+const metrics = {
+  connectionsTotal: 0,
+  connectionsCurrent: 0,
+  messagesPerSecond: 0,
+};
+
+wss.on('connection', (ws) => {
+  metrics.connectionsTotal++;
+  metrics.connectionsCurrent = wss.clients.size;
+
+  // Report to monitoring
+  statsd.gauge('ws.connections', metrics.connectionsCurrent);
+
+  ws.on('close', () => {
+    metrics.connectionsCurrent = wss.clients.size;
+    statsd.gauge('ws.connections', metrics.connectionsCurrent);
+  });
+});
+
+// Message rate tracking
+setInterval(() => {
+  statsd.gauge('ws.messages_per_sec', messageCount / 10);
+  messageCount = 0;
+}, 10000);
+```
+
+## Performance Optimizations
+
+### 1. Message Batching
+
+```typescript
+const messageQueue: Message[] = [];
+let flushTimeout: NodeJS.Timeout;
+
+function queueMessage(msg: Message) {
+  messageQueue.push(msg);
+
+  if (!flushTimeout) {
+    flushTimeout = setTimeout(flushMessages, 16); // ~60 FPS
+  }
+}
+
+function flushMessages() {
+  if (messageQueue.length === 0) return;
+
+  const batch = messageQueue.splice(0, messageQueue.length);
+  broadcast(JSON.stringify(batch));
+
+  flushTimeout = null;
+}
+```
+
+**Impact:** 10x reduction in messages sent.
+
+### 2. Binary Messages
+
+Use binary for large payloads:
+
+```typescript
+// JSON (slow)
+ws.send(JSON.stringify({ type: 'update', data: largeObject }));
+
+// Binary (fast)
+const buffer = msgpack.encode({ type: 'update', data: largeObject });
+ws.send(buffer);
+```
+
+**Impact:** 50% size reduction, 3x faster parsing.
+
+### 3. Compression
+
+Enable per-message deflate:
+
+```typescript
+const wss = new WebSocketServer({
+  perMessageDeflate: {
+    zlibDeflateOptions: {
+      chunkSize: 1024,
+      memLevel: 7,
+      level: 3, // Fast compression
+    },
+  },
+});
+```
+
+**Trade-off:** CPU for bandwidth. Worth it on slow connections.
+
+## Lessons Learned
+
+1. **Start with vertical scaling** - Easier to manage initially
+2. **Add metrics early** - You can't optimize what you don't measure
+3. **Test failure modes** - What happens when Redis dies?
+4. **Graceful degradation** - System should work (degraded) when WebSockets fail
+5. **Load test before scaling** - Find bottlenecks at 1x load, not 10x
+
+## Costs
+
+For 10,000 concurrent users:
+
+- **Compute:** 3x EC2 c5.2xlarge (~$600/mo)
+- **Redis:** ElastiCache m5.large (~$150/mo)
+- **Load Balancer:** ALB (~$30/mo)
+- **Bandwidth:** ~$200/mo
+- **Total:** ~$1,000/mo ($0.10/user/mo)
+
+Compare to Socket.io Cloud: ~$5,000/mo for same scale.
+
+## Tooling
+
+Essential tools:
+
+- **Load testing:** Artillery, k6
+- **Monitoring:** Datadog, CloudWatch
+- **Profiling:** Clinic.js, Chrome DevTools
+- **Debugging:** Wireshark for packet analysis
+
+## Conclusion
+
+Scaling real-time systems requires rethinking traditional web architectures. Plan for horizontal scaling early, invest in monitoring, and test failure modes religiously.
+
+The reward? A system that feels magical to users—instant, collaborative, alive.
+
+Questions? [Reach out on LinkedIn](https://linkedin.com/in/roshankhatri)!

@@ -1,0 +1,183 @@
+---
+title: "3D Data Visualization Dashboard"
+summary: "Interactive WebGL-powered dashboard for exploring complex datasets in 3D space with real-time filtering and immersive analytics."
+cover: "/images/projects/3d-viz.jpg"
+repoUrl: "https://github.com/roshankhatri/3d-data-viz"
+liveUrl: "https://3d-viz-demo.vercel.app"
+tags: ["3D/WebGL", "Data Viz", "Frontend"]
+stack: ["Three.js", "React", "D3.js", "WebGL", "TypeScript", "Tailwind CSS"]
+metrics:
+  lighthouse: 94
+  perfScore: 91
+  users: "5k+"
+  uptime: "99.8%"
+dates:
+  start: "2024-04"
+  end: "2024-08"
+highlights:
+  - "Rendered 100k+ data points at 60 FPS"
+  - "Reduced insights discovery time by 65%"
+  - "Built custom WebGL shaders for performance"
+  - "Fully accessible with keyboard navigation"
+published: true
+---
+
+## Overview
+
+Created an immersive 3D data visualization platform that transforms complex multi-dimensional datasets into intuitive, explorable 3D scenes. Users can fly through their data, filter in real-time, and discover patterns impossible to see in traditional 2D charts.
+
+## The Problem
+
+Traditional dashboards struggle with high-dimensional data:
+
+- **2D limitations:** Hard to show relationships across 3+ dimensions
+- **Performance:** Browser freezes with 10k+ data points
+- **Engagement:** Users don't explore data deeply
+- **Accessibility:** Most 3D visualizations exclude keyboard users
+
+## Solution
+
+### 3D Rendering Engine
+
+Built on Three.js with custom performance optimizations:
+
+```typescript
+// Instanced rendering for 100k particles
+const geometry = new THREE.SphereGeometry(0.1, 8, 8);
+const material = new THREE.MeshBasicMaterial();
+const mesh = new THREE.InstancedMesh(geometry, material, count);
+
+// Update positions via shader
+mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+// GPU-accelerated filtering
+const filterShader = new THREE.ShaderMaterial({
+  uniforms: {
+    filterRange: { value: new THREE.Vector2(min, max) },
+  },
+  vertexShader: /* GLSL */ `
+    attribute float dataValue;
+    varying float vVisible;
+    uniform vec2 filterRange;
+
+    void main() {
+      vVisible = step(filterRange.x, dataValue) * step(dataValue, filterRange.y);
+      // ...
+    }
+  `,
+});
+```
+
+### Interactive Features
+
+- **Orbit controls:** Smooth camera navigation
+- **Brush selection:** Draw to select data points
+- **Temporal playback:** Animate data over time
+- **Linked views:** 2D charts sync with 3D scene
+
+### Performance Techniques
+
+1. **Level of Detail (LOD):** Reduce geometry for distant objects
+2. **Frustum Culling:** Only render visible objects
+3. **Octree Spatial Index:** Fast spatial queries
+4. **Web Workers:** Off-thread data processing
+
+## Technical Deep Dive
+
+### Data Pipeline
+
+```typescript
+// Transform raw data to 3D positions
+const transform = (data: DataPoint[]) => {
+  // Normalize to [0, 1]
+  const normalized = normalize(data);
+
+  // Apply dimensionality reduction (PCA/t-SNE)
+  const reduced = applyPCA(normalized, 3);
+
+  // Scale to scene coordinates
+  return reduced.map(p => ({
+    position: new THREE.Vector3(p.x * scale, p.y * scale, p.z * scale),
+    color: colorScale(p.category),
+    metadata: p,
+  }));
+};
+```
+
+### Accessibility Implementation
+
+Made 3D visualization keyboard-accessible:
+
+- **Focus management:** Tab through data clusters
+- **Screen reader:** Announce focused point details
+- **Alternative views:** Fallback to 2D scatter on demand
+- **Reduced motion:** Disable animations if preferred
+
+```typescript
+// Keyboard navigation
+const focusNextPoint = () => {
+  currentIndex = (currentIndex + 1) % points.length;
+  const point = points[currentIndex];
+
+  // Move camera to point
+  animateCameraTo(point.position);
+
+  // Announce to screen reader
+  announce(`${point.label}: ${point.value}`);
+};
+```
+
+## Results
+
+### Performance
+
+- **60 FPS** with 100k particles
+- **1.2s initial load** on 4G mobile
+- **&lt;16ms frame time** during interaction
+
+### User Impact
+
+- **65% faster** insights discovery (user study)
+- **3x longer** average session duration
+- **89% satisfaction** rating from analysts
+
+## Tech Stack
+
+- **3D:** Three.js, WebGL, GLSL shaders
+- **Framework:** React 18, TypeScript
+- **Data:** D3.js for scales/axes, PCA.js
+- **UI:** Tailwind CSS, Framer Motion
+- **Build:** Vite, Rollup
+
+## Challenges
+
+### Memory Management
+
+**Problem:** Browser crashed with >200k points.
+
+**Solution:**
+- Implemented aggressive object pooling
+- Disposed geometries/materials properly
+- Used WeakMaps for caching
+- Added memory monitoring
+
+### Mobile Performance
+
+**Problem:** Laggy on mobile GPUs.
+
+**Solution:**
+- Reduced particle count on mobile
+- Simplified shaders (no shadows)
+- Disabled post-processing effects
+- Progressive enhancement strategy
+
+## Future Work
+
+- VR mode for immersive exploration
+- Collaborative annotations
+- AI-suggested insights
+- Export to AR for presentations
+
+---
+
+[Try the live demo](https://3d-viz-demo.vercel.app) | [Read the docs](https://github.com/roshankhatri/3d-data-viz)

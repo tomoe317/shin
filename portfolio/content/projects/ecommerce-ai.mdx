@@ -1,0 +1,209 @@
+---
+title: "E-Commerce Platform with AI Recommendations"
+summary: "Next-generation e-commerce platform featuring AI-powered product recommendations, real-time inventory, and sub-second search across millions of products."
+cover: "/images/projects/ecommerce-ai.jpg"
+repoUrl: "https://github.com/roshankhatri/ecommerce-ai"
+liveUrl: "https://shop-demo.example.com"
+tags: ["Featured", "AI/ML", "E-Commerce"]
+stack: ["Next.js", "Python", "TensorFlow", "Elasticsearch", "Stripe", "PostgreSQL"]
+metrics:
+  lighthouse: 96
+  perfScore: 92
+  users: "50k+"
+  uptime: "99.95%"
+dates:
+  start: "2023-09"
+  end: "2024-03"
+highlights:
+  - "35% increase in average order value via AI recommendations"
+  - "Sub-200ms search latency across 5M products"
+  - "Processed $2M+ in transactions"
+  - "Built ML pipeline with 89% recommendation accuracy"
+published: true
+---
+
+## Overview
+
+Developed a modern e-commerce platform that combines cutting-edge machine learning with exceptional user experience. The system handles millions of products, provides instant search, and drives revenue through intelligent recommendations.
+
+## The Challenge
+
+Traditional e-commerce platforms suffer from:
+
+- **Poor discovery:** Users can't find products they'd love
+- **Slow search:** Full-text search doesn't scale to millions of SKUs
+- **Generic experience:** One-size-fits-all product displays
+- **Cart abandonment:** 70%+ of carts never convert
+
+Needed a system that felt personal, fast, and conversion-optimized.
+
+## Solution
+
+### AI Recommendation Engine
+
+Built a hybrid recommendation system combining:
+
+**Collaborative Filtering:**
+```python
+# User-item matrix factorization
+model = NMF(n_components=50, random_state=42)
+user_features = model.fit_transform(user_item_matrix)
+item_features = model.components_
+
+# Generate recommendations
+recommendations = user_features @ item_features
+```
+
+**Content-Based Filtering:**
+- Product embeddings via TF-IDF and Word2Vec
+- Cosine similarity for related products
+- Category and attribute matching
+
+**Contextual Bandits:**
+- Real-time A/B testing of recommendations
+- Thompson Sampling for exploration/exploitation
+- Personalized based on session behavior
+
+### Search Infrastructure
+
+Implemented Elasticsearch with custom scoring:
+
+```javascript
+{
+  "query": {
+    "function_score": {
+      "query": { "multi_match": { "query": "laptop", "fields": ["title^3", "description", "tags^2"] } },
+      "functions": [
+        { "field_value_factor": { "field": "popularity", "modifier": "log1p" } },
+        { "gauss": { "price": { "origin": user.budget, "scale": 200 } } }
+      ],
+      "boost_mode": "multiply"
+    }
+  }
+}
+```
+
+Performance optimizations:
+- Index sharding by category
+- Autocomplete via edge n-grams
+- Faceted search with aggregations
+- Query caching for common searches
+
+## Technical Implementation
+
+### Architecture
+
+```
+┌─────────────┐
+│   Next.js   │ ← Frontend (React 18, Server Components)
+└──────┬──────┘
+       │
+┌──────▼──────────────────────┐
+│   API Gateway (Node.js)     │
+└──┬────────┬─────────┬────────┘
+   │        │         │
+   ▼        ▼         ▼
+┌─────┐ ┌──────┐ ┌─────────┐
+│ DB  │ │ ML   │ │ Search  │
+│(PG) │ │(Fast │ │(Elastic)│
+└─────┘ │API)  │ └─────────┘
+        └──────┘
+```
+
+### ML Pipeline
+
+1. **Data Collection:** Track views, clicks, purchases, ratings
+2. **Feature Engineering:** Extract user/product features
+3. **Model Training:** Weekly batch training on historical data
+4. **Serving:** FastAPI endpoint with &lt;50ms p95 latency
+5. **Monitoring:** Track recommendation CTR and conversion rate
+
+### Performance Optimizations
+
+**Frontend:**
+- React Server Components for initial HTML
+- Streaming SSR for faster TTFB
+- Optimistic UI updates
+- Image optimization (AVIF/WebP, lazy loading)
+
+**Backend:**
+- Database connection pooling
+- Redis caching for product data
+- CDN for static assets
+- Edge functions for geo-routing
+
+## Results
+
+### Performance
+
+- **Search Latency:** 150ms p95 (down from 2s)
+- **Recommendation Latency:** 45ms p95
+- **Page Load:** LCP 1.1s on mobile 4G
+- **Uptime:** 99.95% over 6 months
+
+### Business Impact
+
+- **35% higher AOV** for users clicking recommendations
+- **22% increase** in conversion rate
+- **40% lower** bounce rate on search results
+- **$2.1M revenue** in first 6 months
+
+### ML Metrics
+
+- **89% accuracy** on held-out test set
+- **12% click-through rate** on recommendations
+- **3.2x higher** conversion vs. random suggestions
+
+## Tech Stack
+
+**Frontend:** Next.js 14, TypeScript, Tailwind CSS, Framer Motion
+**Backend:** Node.js, Express, Python (FastAPI)
+**ML:** TensorFlow, scikit-learn, NumPy, Pandas
+**Database:** PostgreSQL, Redis
+**Search:** Elasticsearch
+**Payments:** Stripe
+**Infrastructure:** Vercel, AWS (EC2, RDS, S3), CloudFlare
+
+## Challenges Overcome
+
+### Cold Start Problem
+
+New users had no recommendation history.
+
+**Solution:**
+- Popularity-based fallback
+- Category affinity from browsing
+- Demographic-based defaults
+- Quick onboarding quiz (optional)
+
+### Model Staleness
+
+Product catalog changed daily; models trained weekly.
+
+**Solution:**
+- Real-time feature updates in Redis
+- Hybrid online/offline learning
+- Boosting for new products
+- Automatic retraining triggers
+
+### Search Relevance
+
+Generic keyword matching returned poor results.
+
+**Solution:**
+- Custom scoring with business rules
+- Query expansion (synonyms, misspellings)
+- Personalized ranking
+- Manual tuning for top queries
+
+## Future Enhancements
+
+- Visual search (image → products)
+- Voice search integration
+- Predictive inventory management
+- Multi-language support
+- AR try-on for fashion items
+
+---
+
+**Want to explore?** Check out the [live demo](https://shop-demo.example.com) or [read the ML pipeline docs](https://github.com/roshankhatri/ecommerce-ai/blob/main/docs/ml-pipeline.md).
